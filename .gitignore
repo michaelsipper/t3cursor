@@ -5,4 +5,4 @@ node_modules/
 .next/
 
 # Ignore environment variables
-# .env.local
+.env.local
