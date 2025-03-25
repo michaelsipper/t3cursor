@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { Search, Menu } from 'lucide-react';
 import { FeedCard } from '@/components/shared/feed-card';
 import { ThemeMenu } from '@/components/shared/theme-menu';
-import { usePlan } from '@/components/shared/PlanContext';
+import { usePlan } from '@/contexts/PlanContext';
 
 type TimeFilter = "all" | "now" | "later";
 type ConnectionType = "friends" | "mutuals" | "community";

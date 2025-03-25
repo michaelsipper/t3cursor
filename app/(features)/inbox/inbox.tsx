@@ -3,7 +3,7 @@
 
 import React, { useState } from 'react';
 import { MessageCircle, UserPlus, ArrowLeft, ChevronRight } from 'lucide-react';
-import { useAppContext } from '@/components/shared/AppContext';
+import { useAppContext } from '@/contexts/AppContext';
 import { useRouter } from 'next/navigation';
 
 interface RequestSection {

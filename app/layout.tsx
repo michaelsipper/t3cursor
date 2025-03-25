@@ -4,10 +4,10 @@ import { FooterNav } from '@/components/layout/footer-nav';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { ThemeProvider } from 'next-themes';
-import { AppProvider } from "@/components/shared/AppContext";
-import { AuthProvider } from "@/components/shared/AuthContext";
-import { PlanProvider } from "@/components/shared/PlanContext";
-import { PlanActionsProvider } from "@/components/shared/PlanActionsContext";
+import { AppProvider } from "@/contexts/AppContext";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { PlanProvider } from "@/contexts/PlanContext";
+import { PlanActionsProvider } from "@/contexts/PlanActionsContext";
 
 import './globals.css';
 

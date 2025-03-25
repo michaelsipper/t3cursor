@@ -1,6 +1,6 @@
 // components/shared/profile-header.tsx
 
-import { useAuth } from "@/components/shared/AuthContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { LogOut, Settings } from "lucide-react";
 

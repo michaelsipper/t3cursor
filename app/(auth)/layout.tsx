@@ -1,5 +1,5 @@
 // app/(auth)/layout.tsx
-import { AuthProvider } from "@/components/shared/AuthContext";
+import { AuthProvider } from "@/contexts/AuthContext";
 
 export default function AuthLayout({
   children,

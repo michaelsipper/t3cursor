@@ -5,7 +5,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Send, Image, Loader2 } from 'lucide-react';
-import { useAuth } from '@/components/shared/AuthContext';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Message {
   id: string;

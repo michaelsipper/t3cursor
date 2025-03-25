@@ -2,9 +2,9 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { MapPin, Calendar, Clock, Users, MessageCircle, Share2, Check, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { FeedItem } from '@/lib/types';
-import { usePlanActions } from '@/components/shared/PlanActionsContext';
+import { usePlanActions } from '@/contexts/PlanActionsContext';
 import { useToast } from "@/components/ui/use-toast";
-import { useAuth } from '@/components/shared/AuthContext';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface InterestsViewProps {
   interestedItems: FeedItem[];

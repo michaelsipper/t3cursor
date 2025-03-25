@@ -12,8 +12,8 @@ import {
   MoreVertical,
   Trash2,
 } from "lucide-react";
-import { useAuth } from "./AuthContext";
-import { usePlan } from "./PlanContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { usePlan } from "@/contexts/PlanContext";
 import type {
   FeedItem,
   Location,

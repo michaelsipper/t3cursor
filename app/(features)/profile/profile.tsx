@@ -4,9 +4,9 @@
 import { useState, useEffect } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import { Alert } from "@/components/ui/alert";
-import { useAppContext } from "@/components/shared/AppContext";
-import { useProfile } from "@/components/shared/ProfileContext";
-import { usePlan } from "@/components/shared/PlanContext";
+import { useAppContext } from "@/contexts/AppContext";
+import { useProfile } from "@/contexts/ProfileContext";
+import { usePlan } from "@/contexts/PlanContext";
 import { ProfileInfo } from "./components/profile-info";
 import { PhotosPrompts } from "./components/photos-prompts";
 import { PlansView } from "./components/plans-view";

@@ -1,7 +1,7 @@
 // footprint.tsx
 "use client";
 import React, { useState } from "react";
-import { useAppContext } from "@/components/shared/AppContext";
+import { useAppContext } from "@/contexts/AppContext";
 import {
   MapPin,
   Eye,

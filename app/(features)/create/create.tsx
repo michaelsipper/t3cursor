@@ -25,7 +25,7 @@ import { useRouter } from "next/navigation";
 import type { FeedItem, EventLocation } from "@/lib/types";
 import { FeedCard } from "@/components/shared/feed-card";
 import { format } from "date-fns";
-import { usePlan } from "@/components/shared/PlanContext";
+import { usePlan } from "@/contexts/PlanContext";
 
 type PlanType = "scheduled" | "live" | "upload";
 type Visibility = "friends" | "mutuals" | "community";

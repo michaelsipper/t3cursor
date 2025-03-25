@@ -12,8 +12,8 @@ import {
   Trash2,
   AlertTriangle,
 } from "lucide-react";
-import { useAppContext } from "./AppContext";
-import { useAuth } from "./AuthContext";
+import { useAppContext } from "@/contexts/AppContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 
 interface ThemeMenuProps {

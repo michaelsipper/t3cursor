@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, MoreVertical, Search } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/components/shared/AuthContext';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Message {
   id: string;

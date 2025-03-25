@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import { ArrowLeft, Check, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useAppContext } from '@/components/shared/AppContext';
+import { useAppContext } from '@/contexts/AppContext';
 
 interface InterestedRequest {
   id: number;

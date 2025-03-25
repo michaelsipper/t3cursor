@@ -1,6 +1,6 @@
 // app/(features)/profile/components/plans-view.tsx
 import { useState } from 'react';
-import { usePlanActions } from '@/components/shared/PlanActionsContext';
+import { usePlanActions } from '@/contexts/PlanActionsContext';
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { FeedItem } from '@/lib/types';
