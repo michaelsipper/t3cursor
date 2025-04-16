@@ -12,6 +12,11 @@ interface DialogContentProps {
   className?: string;
 }
 
+interface DialogTitleProps {
+  children: React.ReactNode;
+  className?: string;
+}
+
 const Dialog = ({ open, onOpenChange, children }: DialogProps) => {
   if (!open) return null;
 
@@ -36,4 +41,12 @@ const DialogContent = ({ children, className = "" }: DialogContentProps) => {
   );
 };
 
-export { Dialog, DialogContent };
+const DialogTitle = ({ children, className = "" }: DialogTitleProps) => {
+  return (
+    <div className={`px-6 py-4 border-b border-zinc-200 dark:border-zinc-800 ${className}`}>
+      <h2 className="text-lg font-semibold">{children}</h2>
+    </div>
+  );
+};
+
+export { Dialog, DialogContent, DialogTitle };

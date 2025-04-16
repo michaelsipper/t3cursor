@@ -1,74 +1,83 @@
 // app/api/users/friends/add/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
-import { verifyToken } from "@/app/api/middleware/auth";
+import { verifyToken } from "@/lib/auth";
 import User from "@/models/User";
-import { Connection } from "@/models/Connection";
-import dbConnect from "@/lib/mongodb";
+import dbConnect from "@/lib/dbConnect";
 import mongoose from "mongoose";
+
+interface DecodedToken {
+  userId: string;
+}
 
 export async function POST(req: NextRequest) {
   try {
     await dbConnect();
-    
+
+    // Get token from cookies
     const token = req.cookies.get('token')?.value;
     if (!token) {
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { userId } = verifyToken(token);
+    // Verify token
+    const decoded = await verifyToken(token) as DecodedToken;
+    if (!decoded) {
+      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+    }
+
+    const { userId } = decoded;
     const { friendId } = await req.json();
 
-    // Validate friendId
-    if (!mongoose.Types.ObjectId.isValid(friendId)) {
-      return NextResponse.json({ error: "Invalid friend ID" }, { status: 400 });
+    if (!friendId) {
+      return NextResponse.json({ error: 'Friend ID is required' }, { status: 400 });
     }
+
+    // Convert to ObjectId
+    const userObjectId = new mongoose.Types.ObjectId(userId);
+    const friendObjectId = new mongoose.Types.ObjectId(friendId);
 
     // Check if users exist
-    const [requester, recipient] = await Promise.all([
-      User.findById(userId),
-      User.findById(friendId)
+    const [user, friend] = await Promise.all([
+      User.findById(userObjectId),
+      User.findById(friendObjectId)
     ]);
 
-    if (!recipient || !requester) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    if (!user || !friend) {
+      return NextResponse.json({ error: 'User or friend not found' }, { status: 404 });
     }
 
-    // Check if a connection already exists
-    const existingConnection = await Connection.findOne({
-      $or: [
-        { requester: userId, recipient: friendId },
-        { requester: friendId, recipient: userId }
-      ]
-    });
+    // Check if already friends
+    const isAlreadyFriend = user.friends.some(
+      (id: mongoose.Types.ObjectId) => id.toString() === friendId
+    );
 
-    if (existingConnection) {
-      if (existingConnection.status === 'pending') {
-        return NextResponse.json({ error: "Friend request already sent" }, { status: 400 });
-      }
-      if (existingConnection.status === 'accepted') {
-        return NextResponse.json({ error: "Already friends" }, { status: 400 });
-      }
-      if (existingConnection.status === 'blocked') {
-        return NextResponse.json({ error: "Unable to send request" }, { status: 400 });
-      }
+    if (isAlreadyFriend) {
+      return NextResponse.json({ message: 'Already friends' });
     }
 
-    // Create new pending connection request
-    const connection = new Connection({
-      requester: userId,
-      recipient: friendId,
-      status: 'pending'
-    });
+    // Add friend to user's friend list
+    user.friends.push(friendObjectId);
+    await user.save();
 
-    await connection.save();
+    // Add user to friend's friend list (mutual)
+    friend.friends.push(userObjectId);
+    await friend.save();
 
     return NextResponse.json({ 
-      message: "Friend request sent successfully",
-      requestId: connection._id
+      success: true,
+      message: 'Friend added successfully',
+      friend: {
+        id: friend._id.toString(),
+        name: friend.name,
+        avatarUrl: friend.avatarUrl || null
+      }
     });
   } catch (error) {
-    console.error("Send friend request error:", error);
-    return NextResponse.json({ error: "Failed to send friend request" }, { status: 500 });
+    console.error('Error adding friend:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 }

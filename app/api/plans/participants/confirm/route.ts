@@ -10,6 +10,7 @@ import { IPlanInterestedUser } from '@/lib/types';
 export async function POST(req: NextRequest) {
   try {
     await dbConnect();
+    console.log('[DEBUG] Starting confirm attendance');
     
     const token = req.cookies.get('token')?.value;
     if (!token) {
@@ -18,6 +19,7 @@ export async function POST(req: NextRequest) {
 
     const { userId } = verifyToken(token);
     const { planId } = await req.json();
+    console.log('[DEBUG] Confirming attendance for user:', userId, 'plan:', planId);
 
     if (!mongoose.Types.ObjectId.isValid(planId)) {
       return NextResponse.json({ error: "Invalid plan ID" }, { status: 400 });
@@ -29,6 +31,7 @@ export async function POST(req: NextRequest) {
     ]);
 
     if (!plan || !user) {
+      console.log('[DEBUG] Plan or user not found:', { plan: !!plan, user: !!user });
       return NextResponse.json({ error: "Plan or user not found" }, { status: 404 });
     }
 
@@ -37,6 +40,7 @@ export async function POST(req: NextRequest) {
     );
 
     if (!interestedUser) {
+      console.log('[DEBUG] User not approved for plan');
       return NextResponse.json({ error: "Not approved for this plan" }, { status: 403 });
     }
 
@@ -54,6 +58,7 @@ export async function POST(req: NextRequest) {
 
     plan.event.openSpots--;
     await plan.save();
+    console.log('[DEBUG] Successfully confirmed attendance, participants:', plan.event.participants);
 
     return NextResponse.json({
       success: true,

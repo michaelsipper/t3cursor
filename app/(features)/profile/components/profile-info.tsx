@@ -1,9 +1,11 @@
 // app/(features)/profile/components/profile-info.tsx
 
+import { useState } from "react";
 import { Camera, MapPin, Shield, Check, Edit3, Activity } from "lucide-react";
 import { Loader2 } from "lucide-react";
 import { DEFAULT_STATUS_OPTIONS } from "@/lib/constants";
 import type { ProfileData } from "@/lib/types";
+import { FriendsModal } from "./friends-modal";
 
 interface ProfileInfoProps {
   profileData: ProfileData;
@@ -25,6 +27,8 @@ export function ProfileInfo({
   uploadLoading,
   onUpdateProfile,
 }: ProfileInfoProps) {
+  const [showFriendsModal, setShowFriendsModal] = useState(false);
+
   return (
     <>
       <div className="w-full bg-white dark:bg-zinc-950">
@@ -188,9 +192,12 @@ export function ProfileInfo({
           <div className="mt-6 flex items-center justify-between">
             <div className="flex gap-6">
               <div>
-                <div className="text-lg font-semibold dark:text-zinc-100">
+                <button 
+                  onClick={() => setShowFriendsModal(true)}
+                  className="text-lg font-semibold dark:text-zinc-100 hover:text-blue-500 dark:hover:text-blue-400 transition-colors cursor-pointer"
+                >
                   {profileData.stats.friendCount}
-                </div>
+                </button>
                 <div className="text-sm text-zinc-500">Friends</div>
               </div>
 
@@ -229,6 +236,13 @@ export function ProfileInfo({
           </div>
         </div>
       </div>
+
+      {/* Friends Modal */}
+      <FriendsModal 
+        isOpen={showFriendsModal}
+        onClose={() => setShowFriendsModal(false)}
+        friends={profileData.friends || []}
+      />
     </>
   );
 }

@@ -18,13 +18,20 @@ export function TimeProgressBar({ startTime, duration }: TimeProgressBarProps) {
       const endTime = startTime + (duration * 60 * 60 * 1000);
       const remaining = Math.max(0, endTime - now);
       const percent = (remaining / (duration * 60 * 60 * 1000)) * 100;
-
-      setTimeLeft(remaining);
-      setPercentage(Math.max(0, Math.min(100, percent)));
+      return { remaining, percent: Math.max(0, Math.min(100, percent)) };
     };
 
-    calculateTimeLeft();
-    const timer = setInterval(calculateTimeLeft, 1000);
+    // Initial calculation
+    const { remaining, percent } = calculateTimeLeft();
+    setTimeLeft(remaining);
+    setPercentage(percent);
+
+    // Set up interval for updates
+    const timer = setInterval(() => {
+      const { remaining, percent } = calculateTimeLeft();
+      setTimeLeft(remaining);
+      setPercentage(percent);
+    }, 1000);
 
     return () => clearInterval(timer);
   }, [startTime, duration]);

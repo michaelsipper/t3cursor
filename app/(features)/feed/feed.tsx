@@ -2,10 +2,11 @@
 "use client";
 
 import { useState } from 'react';
-import { Search, Menu } from 'lucide-react';
+import { Search, Menu, Users } from 'lucide-react';
 import { FeedCard } from '@/components/shared/feed-card';
 import { ThemeMenu } from '@/components/shared/theme-menu';
 import { usePlan } from '@/contexts/PlanContext';
+import { UserSearchModal } from '@/components/shared/user-search-modal';
 
 type TimeFilter = "all" | "now" | "later";
 type ConnectionType = "friends" | "mutuals" | "community";
@@ -31,6 +32,7 @@ export function Feed() {
   const [showSearch, setShowSearch] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [repostedItems, setRepostedItems] = useState<Set<string>>(new Set());
+  const [showUserSearch, setShowUserSearch] = useState(false);
 
   const tabs: ConnectionType[] = ["friends", "mutuals", "community"];
 
@@ -72,9 +74,18 @@ export function Feed() {
           <div className="max-w-lg mx-auto px-4">
             {/* Top Bar */}
             <div className="flex items-center justify-between py-4">
-              <button onClick={() => setShowSearch(!showSearch)}>
-                <Search className="w-5 h-5 text-zinc-400 hover:text-zinc-600 dark:hover:text-white transition-colors" />
-              </button>
+              <div className="flex items-center gap-3">
+                <button onClick={() => setShowSearch(!showSearch)}>
+                  <Search className="w-5 h-5 text-zinc-400 hover:text-zinc-600 dark:hover:text-white transition-colors" />
+                </button>
+                <button 
+                  onClick={() => setShowUserSearch(true)}
+                  className="text-zinc-400 hover:text-zinc-600 dark:hover:text-white transition-colors flex items-center gap-1"
+                >
+                  <Users className="w-5 h-5" />
+                  <span className="text-xs">Find People</span>
+                </button>
+              </div>
               <h1 className="text-2xl font-semibold bg-gradient-to-r from-indigo-400 to-sky-400 bg-clip-text text-transparent">
                 Tap'dIn
               </h1>
@@ -94,7 +105,7 @@ export function Feed() {
                 <Search className="w-4 h-4 text-zinc-400" />
                 <input
                   type="text"
-                  placeholder="Search plans, people, places..."
+                  placeholder="Search plans, places..."
                   className="w-full px-3 py-2 bg-transparent text-zinc-900 dark:text-white text-sm placeholder:text-zinc-500 focus:outline-none"
                   value={searchQuery}
                   onChange={(e) => handleSearch(e.target.value)}
@@ -201,7 +212,9 @@ export function Feed() {
         </div>
       </main>
 
+      {/* Modals */}
       <ThemeMenu isOpen={menuOpen} onClose={() => setMenuOpen(false)} />
+      <UserSearchModal isOpen={showUserSearch} onClose={() => setShowUserSearch(false)} />
     </div>
   );
 }

@@ -108,3 +108,78 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+export async function DELETE(req: NextRequest) {
+  try {
+    await dbConnect();
+    
+    const token = req.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    }
+
+    const { userId } = verifyToken(token);
+    const { planId } = await req.json();
+
+    if (!mongoose.Types.ObjectId.isValid(planId)) {
+      return NextResponse.json({ error: "Invalid plan ID" }, { status: 400 });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    const plan = await Plan.findById(planId);
+    if (!plan) {
+      return NextResponse.json({ error: "Plan not found" }, { status: 404 });
+    }
+
+    // Remove user from interested users
+    const updatedPlan = await Plan.findByIdAndUpdate(
+      planId,
+      {
+        $pull: {
+          "event.interestedUsers": {
+            userId: new mongoose.Types.ObjectId(userId)
+          }
+        }
+      },
+      { new: true }
+    ).populate('creator', 'name age avatarUrl');
+
+    if (!updatedPlan) {
+      throw new Error("Failed to update plan");
+    }
+
+    const transformedInterestedUsers = updatedPlan.event.interestedUsers.map((user: IPlanInterestedUser) => ({
+      userId: user.userId.toString(),
+      name: user.name,
+      avatar: user.avatar,
+      joinedAt: user.joinedAt.toISOString()
+    }));
+
+    const transformedParticipants = updatedPlan.event.participants.map((p: IPlanParticipant) => ({
+      userId: p.userId.toString(),
+      name: p.name,
+      avatar: p.avatar,
+      status: p.status,
+      joinedAt: p.joinedAt.toISOString()
+    }));
+
+    return NextResponse.json({
+      success: true,
+      interestedCount: updatedPlan.event.interestedUsers.length,
+      interestedUsers: transformedInterestedUsers,
+      participants: transformedParticipants,
+      openSpots: updatedPlan.event.openSpots
+    });
+
+  } catch (error) {
+    console.error("Leave plan error:", error);
+    return NextResponse.json(
+      { error: "Failed to leave plan" },
+      { status: 500 }
+    );
+  }
+}

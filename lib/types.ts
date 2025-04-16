@@ -120,7 +120,7 @@ export interface ProfilePhoto {
   _id: string;
   url: string | null;
   order: number;
-  region: string;
+  region: 'main' | 'secondary' | 'tertiary';
   publicId?: string | null;
 }
 

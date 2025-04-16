@@ -1,6 +1,11 @@
 // app/(features)/feed/page.tsx
 import { Feed } from './feed';
+import { PageContainer } from "@/components/shared/page-container";
 
 export default function FeedPage() {
-  return <Feed />;
+  return (
+    <PageContainer>
+      <Feed />
+    </PageContainer>
+  );
 }

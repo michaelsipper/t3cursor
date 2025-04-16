@@ -1,8 +1,8 @@
 // app/(features)/inbox/inbox.tsx
 "use client";
 
-import React, { useState } from 'react';
-import { MessageCircle, UserPlus, ArrowLeft, ChevronRight } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { MessageCircle, UserPlus, ArrowLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import { useAppContext } from '@/contexts/AppContext';
 import { useRouter } from 'next/navigation';
 
@@ -44,7 +44,14 @@ const RequestRow: React.FC<{ section: RequestSection; onClick: () => void }> = (
         <UserPlus className="w-6 h-6 text-zinc-600 dark:text-zinc-400" />
       </div>
       <div>
-        <h3 className="font-semibold dark:text-white">{section.title}</h3>
+        <h3 className="font-semibold dark:text-white flex items-center">
+          {section.title}
+          {section.count > 0 && (
+            <span className="ml-2 px-2 py-0.5 text-xs bg-red-500 text-white rounded-full">
+              {section.count}
+            </span>
+          )}
+        </h3>
         <p className="text-sm text-zinc-600 dark:text-zinc-400">{section.subtitle}</p>
       </div>
     </div>
@@ -73,6 +80,9 @@ export default function Inbox() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('all');
   const { interestedItems } = useAppContext();
+  const [friendRequestCount, setFriendRequestCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([
     {
       id: 1,
@@ -98,11 +108,42 @@ export default function Inbox() {
     }
   ]);
 
+  // Fetch friend request count
+  const fetchFriendRequests = useCallback(async () => {
+    try {
+      if (!refreshing) {
+        setRefreshing(true);
+      }
+      
+      const response = await fetch('/api/users/friends/request/get', {
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch friend requests');
+      }
+
+      const data = await response.json();
+      setFriendRequestCount(data.count || 0);
+    } catch (error) {
+      console.error('Error fetching friend requests:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [refreshing]);
+
+  // Load friend requests on initial page load only
+  useEffect(() => {
+    fetchFriendRequests();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const requestSections: RequestSection[] = [
     {
       id: 1,
       type: 'friend',
-      count: 5,
+      count: friendRequestCount,
       title: 'Friend requests',
       subtitle: 'Approve or decline requests',
       path: '/inbox/friend-requests'
@@ -158,12 +199,22 @@ export default function Inbox() {
                 Notifications
               </h1>
             </div>
-            <button 
-              onClick={() => router.push('/inbox/messages')}
-              className="p-2 rounded-lg text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition-colors"
-            >
-              <MessageCircle className="w-5 h-5" />
-            </button>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={fetchFriendRequests}
+                disabled={refreshing}
+                className="p-2 rounded-lg text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition-colors disabled:opacity-50"
+                aria-label="Refresh notifications"
+              >
+                <RefreshCw className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} />
+              </button>
+              <button 
+                onClick={() => router.push('/inbox/messages')}
+                className="p-2 rounded-lg text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition-colors"
+              >
+                <MessageCircle className="w-5 h-5" />
+              </button>
+            </div>
           </div>
           
           <div className="flex gap-2 overflow-x-auto pb-3 mt-4 scrollbar-hide">

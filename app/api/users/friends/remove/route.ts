@@ -1,10 +1,14 @@
 // app/api/users/friends/remove/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
-import { verifyToken } from "@/app/api/middleware/auth";
+import { verifyToken } from "@/lib/auth";
 import User from "@/models/User";
-import dbConnect from "@/lib/mongodb";
+import dbConnect from "@/lib/dbConnect";
 import mongoose from "mongoose";
+
+interface DecodedToken {
+  userId: string;
+}
 
 export async function DELETE(req: NextRequest) {
   try {
@@ -15,7 +19,7 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
 
-    const { userId } = verifyToken(token);
+    const { userId } = verifyToken(token) as DecodedToken;
     const { friendId } = await req.json();
 
     // Validate friendId

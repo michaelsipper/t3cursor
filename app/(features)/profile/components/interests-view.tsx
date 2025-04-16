@@ -10,6 +10,20 @@ interface InterestsViewProps {
   interestedItems: FeedItem[];
 }
 
+const formatDateTime = (dateString?: string | number) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return String(dateString);
+  
+  return date.toLocaleString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  }).replace(',', ' •');
+};
+
 export function InterestsView({ interestedItems }: InterestsViewProps) {
   const { confirmAttendance, getParticipantStatus, refreshPlanStatus } = usePlanActions();
   const { showToast } = useToast();
@@ -141,7 +155,7 @@ export function InterestsView({ interestedItems }: InterestsViewProps) {
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
             <Calendar className="w-4 h-4" />
-            <span>{plan.event.time}</span>
+            <span>{formatDateTime(plan.event.time)}</span>
           </div>
           <div className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
             <Users className="w-4 h-4" />

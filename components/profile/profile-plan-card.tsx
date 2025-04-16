@@ -19,6 +19,20 @@ const getLocationName = (location: string | Location): string => {
   return location.name;
 };
 
+const formatDateTime = (dateString?: string | number) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return String(dateString);
+  
+  return date.toLocaleString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  }).replace(',', ' •');
+};
+
 export function ProfilePlanCard({ plan, variant }: ProfilePlanCardProps) {
   const [showPreview, setShowPreview] = useState(false);
   const [showInterestedModal, setShowInterestedModal] = useState(false);
@@ -85,7 +99,7 @@ export function ProfilePlanCard({ plan, variant }: ProfilePlanCardProps) {
           <div className="flex items-center gap-2 mb-2 text-zinc-500">
             <Clock className="w-4 h-4" />
             <span className="text-sm">
-              {formatDistanceToNow(new Date(plan.event.time || plan.event.startTime || ''))}
+              {formatDateTime(plan.event.time || plan.event.startTime || '')}
             </span>
           </div>
           <p className="text-sm text-zinc-600 dark:text-zinc-400">

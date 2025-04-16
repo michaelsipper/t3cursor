@@ -17,11 +17,18 @@ export function InterestPlanCard({ plan, status = 'pending' }: InterestPlanCardP
    }
  };
 
- const formatDate = (dateString?: string | number) => {
+ const formatDateTime = (dateString?: string | number) => {
    if (!dateString) return '';
    const date = new Date(dateString);
    if (!isValid(date)) return '';
-   return format(date, 'EEE, MMM d');
+   
+   return date.toLocaleString('en-US', {
+     month: 'long',
+     day: 'numeric',
+     hour: 'numeric',
+     minute: '2-digit',
+     hour12: true
+   }).replace(',', ' •');
  };
 
  const formatTime = (dateString?: string | number) => {
@@ -70,9 +77,9 @@ export function InterestPlanCard({ plan, status = 'pending' }: InterestPlanCardP
      {hostSection}
 
      <div className="p-4 bg-white dark:bg-zinc-900 space-y-2">
-       <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-400">
+       <div className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
          <Calendar className="w-4 h-4" />
-         <span className="text-sm">{formatDate(plan.event.time)}</span>
+         <span>{formatDateTime(plan.event.time)}</span>
        </div>
 
        <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-400">

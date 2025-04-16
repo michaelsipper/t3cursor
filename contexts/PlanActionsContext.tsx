@@ -1,8 +1,9 @@
 "use client";
 
-import { createContext, useContext, ReactNode, useState, useCallback } from 'react';
+import { createContext, useContext, ReactNode, useState, useCallback, useEffect } from 'react';
 import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from '@/contexts/AuthContext';
+import { usePlan } from '@/contexts/PlanContext';
 
 type ParticipantStatus = 'pending' | 'accepted' | 'rejected' | 'confirmed';
 
@@ -24,13 +25,30 @@ const PlanActionsContext = createContext<PlanActionsContextType | undefined>(und
 export function PlanActionsProvider({ children }: { children: ReactNode }) {
   const { showToast } = useToast();
   const { user } = useAuth();
+  const { fetchPlans } = usePlan();
   const [participantStatuses, setParticipantStatuses] = useState<Map<string, StatusEntry>>(new Map());
+
+  // Clear state when auth changes
+  useEffect(() => {
+    if (!user) {
+      setParticipantStatuses(new Map());
+    }
+  }, [user]);
 
   const getParticipantStatus = useCallback((planId: string, userId: string) => {
     const key = `${planId}-${userId}`;
     const status = participantStatuses.get(key);
     return status?.status;
   }, [participantStatuses]);
+
+  const updateParticipantStatus = useCallback(async (planId: string, userId: string, status: ParticipantStatus) => {
+    setParticipantStatuses(prev => {
+      const newMap = new Map(prev);
+      const key = `${planId}-${userId}`;
+      newMap.set(key, { status, userId });
+      return newMap;
+    });
+  }, []);
 
   const refreshPlanStatus = useCallback(async (planId: string) => {
     try {
@@ -78,20 +96,10 @@ export function PlanActionsProvider({ children }: { children: ReactNode }) {
   
         return newStatuses;
       });
-  
     } catch (error) {
       console.error('Error refreshing plan status:', error);
+      throw error;
     }
-  }, []);
-  
-
-  const updateParticipantStatus = useCallback(async (planId: string, userId: string, status: ParticipantStatus) => {
-    setParticipantStatuses(prev => {
-      const newMap = new Map(prev);
-      const key = `${planId}-${userId}`;
-      newMap.set(key, { status, userId });
-      return newMap;
-    });
   }, []);
 
   const acceptInterested = useCallback(async (planId: string, userId: string) => {
@@ -156,7 +164,7 @@ export function PlanActionsProvider({ children }: { children: ReactNode }) {
       
       const data = await response.json();
       
-      // Immediately update local status to confirmed
+      // Update local status to confirmed
       if (user) {
         const userId = user._id?.toString() || user.id?.toString();
         setParticipantStatuses(prev => {
@@ -165,24 +173,33 @@ export function PlanActionsProvider({ children }: { children: ReactNode }) {
           newMap.set(key, { status: 'confirmed', userId });
           return newMap;
         });
+
+        // Refresh both interested items and user plans
+        await fetchPlans();
+        await refreshPlanStatus(planId);
       }
   
+      showToast('Successfully confirmed attendance!');
       return data;
     } catch (error) {
       console.error('Confirm attendance error:', error);
       throw error;
     }
-  }, [user]);
+  }, [user, fetchPlans, refreshPlanStatus, showToast]);
+
+  const contextValue: PlanActionsContextType = {
+    acceptInterested,
+    rejectInterested,
+    confirmAttendance,
+    getParticipantStatus,
+    refreshPlanStatus
+  };
 
   return (
-    <PlanActionsContext.Provider value={{ 
-      acceptInterested, 
-      rejectInterested,
-      confirmAttendance,
-      getParticipantStatus,
-      refreshPlanStatus
-    }}>
-      {children}
+    <PlanActionsContext.Provider value={contextValue}>
+      <div key={user?.id || 'no-user'}>
+        {children}
+      </div>
     </PlanActionsContext.Provider>
   );
 }

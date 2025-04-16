@@ -33,6 +33,13 @@ export interface IUser extends Document {
   status: typeof DEFAULT_STATUS_OPTIONS[number];
   createdAt: Date;
   updatedAt: Date;
+  friendRequests: {
+    userId: mongoose.Types.ObjectId;
+    name: string;
+    avatar: string | null;
+    status: 'pending' | 'accepted' | 'rejected';
+    createdAt: Date;
+  }[];
 }
 
 const UserSchema = new Schema<IUser>({
@@ -101,7 +108,19 @@ const UserSchema = new Schema<IUser>({
     type: String, 
     enum: DEFAULT_STATUS_OPTIONS,
     default: "Down to hangout"
-  }
+  },
+  friendRequests: [{
+    userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    name: { type: String, required: true },
+    avatar: { type: String, default: null },
+    status: { 
+      type: String, 
+      required: true,
+      enum: ['pending', 'accepted', 'rejected'],
+      default: 'pending'
+    },
+    createdAt: { type: Date, default: Date.now }
+  }]
 }, { 
   timestamps: true,
   toJSON: {
@@ -116,6 +135,12 @@ const UserSchema = new Schema<IUser>({
 // Add indexes for performance
 UserSchema.index({ email: 1 });
 UserSchema.index({ university: 1 });
+
+// Add index for friend requests
+UserSchema.index({ 'friendRequests.userId': 1 });
+
+// Add index for friends
+UserSchema.index({ friends: 1 });
 
 // Pre-save middleware for validation and cleanup
 UserSchema.pre('save', function(next) {

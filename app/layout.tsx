@@ -4,10 +4,8 @@ import { FooterNav } from '@/components/layout/footer-nav';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { ThemeProvider } from 'next-themes';
-import { AppProvider } from "@/contexts/AppContext";
 import { AuthProvider } from "@/contexts/AuthContext";
-import { PlanProvider } from "@/contexts/PlanContext";
-import { PlanActionsProvider } from "@/contexts/PlanActionsContext";
+import { ClientProviders } from '@/components/providers/client-providers';
 
 import './globals.css';
 
@@ -31,23 +29,19 @@ export default function RootLayout({
      </head>
      <body className={inter.className}>
        <AuthProvider>
-         <AppProvider>
-           <PlanProvider>
-             <PlanActionsProvider>
-               <ThemeProvider
-                 attribute="class"
-                 defaultTheme="dark"
-                 enableSystem={true}
-                 disableTransitionOnChange
-               >
-                 <div className="min-h-screen flex flex-col">
-                   <main className="flex-1 pb-16">{children}</main>
-                   <FooterNav />
-                 </div>
-               </ThemeProvider>
-             </PlanActionsProvider>
-           </PlanProvider>
-         </AppProvider>
+         <ClientProviders>
+           <ThemeProvider
+             attribute="class"
+             defaultTheme="dark"
+             enableSystem={true}
+             disableTransitionOnChange
+           >
+             <div className="min-h-screen flex flex-col">
+               <main className="flex-1 pb-16">{children}</main>
+               <FooterNav />
+             </div>
+           </ThemeProvider>
+         </ClientProviders>
        </AuthProvider>
      </body>
    </html>

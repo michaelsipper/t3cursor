@@ -7,6 +7,7 @@ import {
   useState,
   useEffect,
   ReactNode,
+  useCallback,
 } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -38,6 +39,7 @@ interface PlanOptions {
 interface PlanContextType {
   feedItems: FeedItem[];
   interestedItems: FeedItem[];
+  userPlans: FeedItem[];
   loading: boolean;
   error: string | null;
   visibility: "friends" | "mutuals" | "community";
@@ -52,6 +54,7 @@ interface PlanContextType {
   leavePlan: (planId: string) => Promise<PlanActionResponse>;
   addComment: (planId: string, content: string) => Promise<void>;
   fetchPlans: (options?: PlanOptions) => Promise<void>;
+  fetchUserPlans: (userId?: string) => Promise<FeedItem[]>;
   fetchNearbyPlans: (
     lat: number,
     lng: number,
@@ -65,6 +68,9 @@ interface PlanContextType {
     file: File | string,
     type: "image" | "url"
   ) => Promise<ProcessedData>;
+  getParticipantStatus: (planId: string) => Promise<boolean>;
+  refreshPlanStatus: (planId: string) => Promise<void>;
+  setParticipantStatus: (planId: string, status: boolean) => Promise<void>;
 }
 
 const PlanContext = createContext<PlanContextType | undefined>(undefined);
@@ -75,6 +81,7 @@ export function PlanProvider({ children }: { children: ReactNode }) {
 
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
   const [interestedItems, setInterestedItems] = useState<FeedItem[]>([]);
+  const [userPlans, setUserPlans] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [visibility, setVisibility] = useState<
@@ -83,6 +90,24 @@ export function PlanProvider({ children }: { children: ReactNode }) {
   const [timeFilter, setTimeFilter] = useState<"all" | "now" | "later">("all");
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Add a cache map for user plans
+  const [userPlansCache, setUserPlansCache] = useState<Record<string, { plans: FeedItem[], timestamp: number }>>({});
+  const CACHE_EXPIRY = 30000; // 30 seconds cache expiry
+
+  // Clear state when auth changes
+  useEffect(() => {
+    if (!isAuthenticated || !user) {
+      setFeedItems([]);
+      setInterestedItems([]);
+      setUserPlans([]);
+      setError(null);
+      setVisibility("friends");
+      setTimeFilter("all");
+      setSearchQuery("");
+    }
+  }, [isAuthenticated, user]);
+
+  // Only fetch plans if authenticated and filter settings change
   useEffect(() => {
     if (isAuthenticated && user) {
       const options: PlanOptions = {
@@ -90,23 +115,175 @@ export function PlanProvider({ children }: { children: ReactNode }) {
         timeFilter,
         search: searchQuery,
       };
+      
+      // Don't use fetchUserPlans here - it will be called separately when needed
       fetchPlans(options);
     }
   }, [isAuthenticated, user, visibility, timeFilter, searchQuery]);
 
-  const fetchPlans = async (options?: PlanOptions & { userOnly?: boolean }) => {
+  const fetchUserData = async (userId: string) => {
+    try {
+      const response = await fetch(`/api/users/${userId}`, {
+        method: 'GET',
+        credentials: 'include'
+      });
+
+      if (!response.ok) return null;
+      
+      const userData = await response.json();
+      return userData;
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+      return null;
+    }
+  };
+
+  const enhanceParticipantsData = async (participants: any[]) => {
+    if (!Array.isArray(participants) || participants.length === 0) return participants;
+    
+    // Get unique user IDs that are missing data (name or avatar)
+    const incompleteParticipants = participants.filter(
+      p => (!p.name || p.name === 'Unknown participant' || !p.avatar)
+    );
+    
+    if (incompleteParticipants.length === 0) return participants;
+    
+    console.log('🔍 Enhancing participant data for:', 
+      incompleteParticipants.map(p => ({ userId: p.userId, name: p.name }))
+    );
+    
+    // Fetch user data for each incomplete participant
+    const enhancedParticipants = [...participants];
+    
+    await Promise.all(
+      incompleteParticipants.map(async (participant) => {
+        try {
+          // Find the participant in our array
+          const index = enhancedParticipants.findIndex(p => p.userId === participant.userId);
+          if (index === -1) return;
+          
+          // Fetch user data
+          const userData = await fetchUserData(participant.userId);
+          if (!userData) return;
+          
+          // Update the participant with the fetched data
+          if (!enhancedParticipants[index].name || enhancedParticipants[index].name === 'Unknown participant') {
+            enhancedParticipants[index].name = userData.name || enhancedParticipants[index].name;
+          }
+          
+          if (!enhancedParticipants[index].avatar) {
+            enhancedParticipants[index].avatar = userData.avatarUrl || 
+              `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(userData.name || 'User')}`;
+          }
+          
+          console.log('🔍 Enhanced participant data:', {
+            userId: participant.userId,
+            name: enhancedParticipants[index].name,
+            hasAvatar: !!enhancedParticipants[index].avatar
+          });
+        } catch (err) {
+          console.error('Error enhancing participant:', participant.userId, err);
+        }
+      })
+    );
+    
+    return enhancedParticipants;
+  };
+
+  const fetchUserPlans = useCallback(async (userId?: string) => {
+    if (!user) {
+      console.log('[DEBUG] fetchUserPlans called without user, skipping');
+      return [];
+    }
+    
+    const currentTime = Date.now();
+    const targetUserId = userId || user._id?.toString() || user.id?.toString() || '';
+    const isCurrentUser = !userId || targetUserId === user._id?.toString() || targetUserId === user.id?.toString();
+    
+    console.log('[DEBUG] fetchUserPlans', {
+      userId,
+      targetUserId,
+      isCurrentUser,
+      currentUserId: user._id?.toString() || user.id?.toString()
+    });
+    
+    // Check if we have recent data in cache
+    if (userPlansCache[targetUserId] && 
+        currentTime - userPlansCache[targetUserId].timestamp < CACHE_EXPIRY) {
+      console.log('[DEBUG] Using cached plans for user', targetUserId.slice(0, 8) + '...');
+      
+      if (isCurrentUser) {
+        console.log('[DEBUG] Setting userPlans state from cache for current user');
+        setUserPlans(userPlansCache[targetUserId].plans);
+      }
+      
+      return userPlansCache[targetUserId].plans;
+    }
+    
+    try {
+      // Truncate IDs in logs for better readability
+      console.log('[DEBUG] Fetching fresh plans for user', targetUserId.slice(0, 8) + '...');
+      
+      const params = new URLSearchParams();
+      params.append('userOnly', 'true');
+      
+      // If fetching for another user, add their ID to the query
+      if (!isCurrentUser) {
+        params.append('userId', userId!);
+      }
+      
+      const response = await fetch(`/api/plans/feed?${params.toString()}`, {
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+
+      const { plans } = await response.json();
+      console.log('[DEBUG] Received plans from API:', plans?.length || 0, 'plans');
+      
+      // Enhance participant data for each plan
+      const enhancedPlans = await Promise.all(
+        (plans || []).map(async (plan: any) => {
+          if (plan.event.participants && plan.event.participants.length > 0) {
+            plan.event.participants = await enhanceParticipantsData(plan.event.participants);
+          }
+          return plan;
+        })
+      );
+      
+      // Store plans in cache
+      setUserPlansCache(prev => ({
+        ...prev,
+        [targetUserId]: {
+          plans: enhancedPlans || [],
+          timestamp: currentTime
+        }
+      }));
+      
+      // For current user, update the state
+      if (isCurrentUser) {
+        console.log('[DEBUG] Setting userPlans state for current user');
+        setUserPlans(enhancedPlans || []);
+      }
+      
+      return enhancedPlans || [];
+    } catch (error) {
+      console.error('Error fetching user plans:', error);
+      showToast('Failed to load plans');
+      return [];
+    }
+  }, [user, showToast, userPlansCache, enhanceParticipantsData]);
+
+  const fetchPlans = async (options?: PlanOptions) => {
     if (!user) {
       console.log("No user data available, skipping fetch");
       return;
     }
 
-    // console.log('Auth state:', {
-    //   isAuthenticated,
-    //   userId: user?._id || user?.id,
-    //   user: user
-    // });
-
     try {
+      console.log('[DEBUG] Starting fetchPlans');
       setLoading(true);
       setError(null);
 
@@ -114,10 +291,9 @@ export function PlanProvider({ children }: { children: ReactNode }) {
         visibility: options?.visibility || visibility,
         timeFilter: options?.timeFilter || timeFilter,
         search: options?.search || searchQuery,
-        userOnly: options?.userOnly,
       };
 
-      console.log("Fetching plans with options:", finalOptions);
+      console.log("[DEBUG] Fetching plans with options:", finalOptions);
 
       const params = new URLSearchParams();
       params.append("visibility", finalOptions.visibility);
@@ -125,12 +301,8 @@ export function PlanProvider({ children }: { children: ReactNode }) {
       if (finalOptions.search) {
         params.append("search", finalOptions.search);
       }
-      if (finalOptions.userOnly) {
-        params.append("userOnly", "true");
-      }
 
-      //   console.log('Fetch request URL:', `/api/plans/feed?${params.toString()}`);
-
+      console.log('[DEBUG] Fetching plans with params:', Object.fromEntries(params.entries()));
       const response = await fetch(`/api/plans/feed?${params.toString()}`, {
         credentials: "include",
       });
@@ -140,69 +312,39 @@ export function PlanProvider({ children }: { children: ReactNode }) {
       }
 
       const { plans } = await response.json();
+      
+      // Enhance participant data for each plan
+      const enhancedPlans = await Promise.all(
+        plans.map(async (plan: any) => {
+          if (plan.event.participants && plan.event.participants.length > 0) {
+            plan.event.participants = await enhanceParticipantsData(plan.event.participants);
+          }
+          return plan;
+        })
+      );
+      
+      const transformedPlans = enhancedPlans;
+      console.log("[DEBUG] Received plans from API:", transformedPlans);
 
-      if (!Array.isArray(plans)) {
-        throw new Error("Invalid plans data received");
-      }
-
-      const transformedPlans = plans.map((plan: any) => ({
-        id: plan.id || plan._id?.toString(),
-        type: plan.type,
-        creator: {
-          id: plan.creator.id || plan.creator._id?.toString(),
-        },
-        poster: {
-          id: plan.poster.id || plan.poster._id?.toString(),
-          name: plan.poster.name,
-          age: plan.poster.age,
-          avatarUrl: plan.poster.avatarUrl,
-          connection: plan.poster.connection,
-        },
-        event: {
-          title: plan.event.title,
-          description: plan.event.description || "",
-          location: plan.event.location,
-          time: plan.event.time,
-          startTime: plan.event.startTime,
-          duration: plan.event.duration,
-          interestedUsers: Array.isArray(plan.event.interestedUsers)
-            ? plan.event.interestedUsers.map((user: any) => ({
-                userId: user.userId?.toString() || user._id?.toString(),
-                name: user.name,
-                avatar: user.avatar,
-                joinedAt: user.joinedAt,
-              }))
-            : [],
-          currentInterested: plan.event.currentInterested || 0,
-          openInvite: plan.event.openInvite,
-          totalSpots: plan.event.totalSpots,
-          openSpots: plan.event.openSpots,
-          participants: Array.isArray(plan.event.participants)
-            ? plan.event.participants.map((p: any) => ({
-                userId: p.userId?.toString() || p._id?.toString(),
-                name: p.name,
-                avatar: p.avatar,
-                status: p.status,
-                joinedAt: p.joinedAt,
-              }))
-            : [],
-        },
-      }));
-
-      // console.log(
-      //   "Transformed plans:",
-      //   JSON.stringify(transformedPlans, null, 2)
-      // );
-      setFeedItems(transformedPlans);
-
-      // Handle interested items with proper ID checking
       const userId = user._id?.toString() || user.id?.toString();
+      console.log("[DEBUG] Current user ID:", userId);
+
+      // For feed page, update feed items and filter interested/participating plans
+      setFeedItems(transformedPlans);
+      
       if (userId) {
-        const userInterestedPlans = transformedPlans.filter((plan: FeedItem) =>
-          plan.event.interestedUsers?.some(
+        // Plans where user is only interested (not yet a participant)
+        const userInterestedPlans = transformedPlans.filter((plan: FeedItem) => {
+          const isInterested = plan.event.interestedUsers?.some(
             (interestedUser) => String(interestedUser.userId) === String(userId)
-          )
-        );
+          );
+          const isParticipant = plan.event.participants?.some(
+            (participant) => String(participant.userId) === String(userId)
+          );
+          console.log(`[DEBUG] Plan ${plan.id} - isInterested: ${isInterested}, isParticipant: ${isParticipant}`);
+          return isInterested && !isParticipant;
+        });
+        console.log("[DEBUG] Filtered interested plans:", userInterestedPlans);
         setInterestedItems(userInterestedPlans);
       }
     } catch (error) {
@@ -368,7 +510,30 @@ export function PlanProvider({ children }: { children: ReactNode }) {
       }
 
       const newPlan = await response.json();
+      
+      // Add to feed items
       setFeedItems((prev) => [newPlan, ...prev]);
+      
+      // Also add to user plans since the user is the creator
+      setUserPlans((prev) => [newPlan, ...prev]);
+      
+      // Update the cache for current user
+      if (user) {
+        const userId = user._id?.toString() || user.id?.toString();
+        if (userId) {
+          setUserPlansCache(prev => {
+            const currentCache = prev[userId];
+            return {
+              ...prev,
+              [userId]: {
+                plans: currentCache ? [newPlan, ...currentCache.plans] : [newPlan],
+                timestamp: Date.now()
+              }
+            };
+          });
+        }
+      }
+      
       showToast("Plan created successfully!");
     } catch (error) {
       console.error("Create plan error:", error);
@@ -400,6 +565,28 @@ export function PlanProvider({ children }: { children: ReactNode }) {
 
       setFeedItems((prev) => prev.filter((item) => item.id !== planId));
       setInterestedItems((prev) => prev.filter((item) => item.id !== planId));
+      // Also update userPlans to ensure it's removed from profile
+      setUserPlans((prev) => prev.filter((item) => item.id !== planId));
+      
+      // Clear the plan from the cache if it exists
+      if (user) {
+        const userId = user._id?.toString() || user.id?.toString();
+        if (userId) {
+          setUserPlansCache(prev => {
+            const currentCache = prev[userId];
+            if (!currentCache) return prev;
+            
+            return {
+              ...prev,
+              [userId]: {
+                plans: currentCache.plans.filter(plan => plan.id !== planId),
+                timestamp: Date.now()
+              }
+            };
+          });
+        }
+      }
+      
       showToast("Plan deleted successfully");
     } catch (error) {
       console.error("Delete plan error:", error);
@@ -430,13 +617,41 @@ export function PlanProvider({ children }: { children: ReactNode }) {
 
       const updatedPlan = await response.json();
 
+      // Update in feed items
       setFeedItems((prev) =>
         prev.map((item) => (item.id === planId ? updatedPlan : item))
       );
 
+      // Update in interested items
       setInterestedItems((prev) =>
         prev.map((item) => (item.id === planId ? updatedPlan : item))
       );
+      
+      // Update in user plans
+      setUserPlans((prev) =>
+        prev.map((item) => (item.id === planId ? updatedPlan : item))
+      );
+      
+      // Update in cache
+      if (user) {
+        const userId = user._id?.toString() || user.id?.toString();
+        if (userId) {
+          setUserPlansCache(prev => {
+            const currentCache = prev[userId];
+            if (!currentCache) return prev;
+            
+            return {
+              ...prev,
+              [userId]: {
+                plans: currentCache.plans.map(plan => 
+                  plan.id === planId ? updatedPlan : plan
+                ),
+                timestamp: Date.now()
+              }
+            };
+          });
+        }
+      }
 
       showToast("Plan updated successfully");
     } catch (error) {
@@ -591,9 +806,25 @@ export function PlanProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const getParticipantStatus = async (planId: string): Promise<boolean> => {
+    // Implementation of getParticipantStatus
+    throw new Error("Method not implemented");
+  };
+
+  const refreshPlanStatus = async (planId: string): Promise<void> => {
+    // Implementation of refreshPlanStatus
+    throw new Error("Method not implemented");
+  };
+
+  const setParticipantStatus = async (planId: string, status: boolean): Promise<void> => {
+    // Implementation of setParticipantStatus
+    throw new Error("Method not implemented");
+  };
+
   const contextValue: PlanContextType = {
     feedItems,
     interestedItems,
+    userPlans,
     loading,
     error,
     visibility,
@@ -608,16 +839,24 @@ export function PlanProvider({ children }: { children: ReactNode }) {
     leavePlan,
     addComment,
     fetchPlans,
+    fetchUserPlans,
     fetchNearbyPlans,
     setVisibility,
     setTimeFilter,
     setSearchQuery,
     processUpload,
     setFeedItems,
+    getParticipantStatus,
+    refreshPlanStatus,
+    setParticipantStatus
   };
 
   return (
-    <PlanContext.Provider value={contextValue}>{children}</PlanContext.Provider>
+    <PlanContext.Provider value={contextValue}>
+      <div key={user?.id || 'no-user'}>
+        {children}
+      </div>
+    </PlanContext.Provider>
   );
 }
 

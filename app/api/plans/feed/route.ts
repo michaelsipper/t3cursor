@@ -69,16 +69,18 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
 
-    const { userId } = verifyToken(token);
+    const { userId: currentUserId } = verifyToken(token);
     const url = new URL(req.url);
     
     const requestedView = url.searchParams.get("visibility") || "friends";
     const timeFilter = url.searchParams.get("timeFilter") || "all";
     const search = url.searchParams.get("search") || "";
     const fetchForProfile = url.searchParams.get('fetchForProfile') === 'true';
+    const userOnly = url.searchParams.get('userOnly') === 'true';
+    const targetUserId = url.searchParams.get('userId') || currentUserId;
 
     // Find user and their friends
-    const user = await User.findById(userId).select('friends');
+    const user = await User.findById(currentUserId).select('friends');
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
@@ -96,7 +98,7 @@ export async function GET(req: NextRequest) {
     // Filter out direct friends and self from mutuals
     const mutualIds = friendsOfFriends.filter((fofId: mongoose.Types.ObjectId) => 
       !friendIds.some((fId: mongoose.Types.ObjectId) => fId.equals(fofId)) && 
-      fofId.toString() !== userId
+      fofId.toString() !== currentUserId
     );
 
     // Build base filters
@@ -124,11 +126,50 @@ export async function GET(req: NextRequest) {
     // Build visibility query based on requested view
     let visibilityQuery: any = {};
 
-    // If fetching for profile page, ignore visibility filters
-    if (fetchForProfile) {
+    // If fetching for profile page, only get plans where user is a participant
+    if (userOnly) {
+      const userIdForQuery = targetUserId;
+      console.log('[DEBUG] Fetching plans for profile page, userId:', userIdForQuery);
+      
       visibilityQuery = {
-        creator: new mongoose.Types.ObjectId(userId)
+        $or: [
+          // Plans where user is a participant (including creator)
+          {
+            'event.participants.userId': new mongoose.Types.ObjectId(userIdForQuery)
+          },
+          // Plans explicitly created by the user (in case there was any issue with participants array)
+          {
+            creator: new mongoose.Types.ObjectId(userIdForQuery)
+          }
+        ]
       };
+      
+      // If viewing someone else's plans, only show plans that are visible to the current user
+      if (targetUserId !== currentUserId) {
+        const isFriend = friendIds.some((id: mongoose.Types.ObjectId) => id.toString() === targetUserId);
+        const isMutual = mutualIds.some((id: mongoose.Types.ObjectId) => id.toString() === targetUserId);
+        
+        let visibilityRestriction;
+        if (isFriend) {
+          // Friends can see everything
+          visibilityRestriction = { visibility: { $in: ['friends', 'mutuals', 'community'] } };
+        } else if (isMutual) {
+          // Mutuals can only see mutuals and community plans
+          visibilityRestriction = { visibility: { $in: ['mutuals', 'community'] } };
+        } else {
+          // Others can only see community plans
+          visibilityRestriction = { visibility: 'community' };
+        }
+        
+        visibilityQuery = {
+          $and: [
+            visibilityQuery,
+            visibilityRestriction
+          ]
+        };
+      }
+      
+      console.log('[DEBUG] User-only query:', JSON.stringify(visibilityQuery, null, 2));
     } else {
       switch (requestedView) {
         case "friends":
@@ -136,7 +177,7 @@ export async function GET(req: NextRequest) {
             $or: [
               // Self-posted plans to friends
               {
-                creator: new mongoose.Types.ObjectId(userId),
+                creator: new mongoose.Types.ObjectId(currentUserId),
                 visibility: "friends"
               },
               // Friend-posted plans (any visibility)
@@ -152,7 +193,7 @@ export async function GET(req: NextRequest) {
             $or: [
               // Self-posted plans to mutuals
               {
-                creator: new mongoose.Types.ObjectId(userId),
+                creator: new mongoose.Types.ObjectId(currentUserId),
                 visibility: "mutuals"
               },
               // Mutual-posted plans to mutuals or community
@@ -169,13 +210,13 @@ export async function GET(req: NextRequest) {
             $or: [
               // Self-posted plans to community
               {
-                creator: new mongoose.Types.ObjectId(userId),
+                creator: new mongoose.Types.ObjectId(currentUserId),
                 visibility: "community"
               },
               // Third-degree connection plans posted to community
               {
                 creator: { 
-                  $nin: [...friendIds, ...mutualIds, new mongoose.Types.ObjectId(userId)]
+                  $nin: [...friendIds, ...mutualIds, new mongoose.Types.ObjectId(currentUserId)]
                 },
                 visibility: "community"
               }
@@ -188,24 +229,21 @@ export async function GET(req: NextRequest) {
     // Combine all filters
     const finalQuery = {
       $and: [
-        visibilityQuery,
-        baseFilters
+        baseFilters,
+        visibilityQuery
       ]
     };
 
-    // console.log('Query:', JSON.stringify(finalQuery, null, 2));
+    console.log('[DEBUG] Final query:', JSON.stringify(finalQuery, null, 2));
+    const plans = await Plan.find(finalQuery)
+      .populate('creator', 'name age avatarUrl friends')
+      .sort({ createdAt: -1 });
 
-    // Fetch and populate plans
-    const plans = (await Plan.find(finalQuery)
-    .populate('creator', 'name age avatarUrl friends')
-    .sort({ createdAt: -1 })
-    .lean()) as unknown as DBPlan[];
-
-    // console.log('Raw plans from DB:', plans);
+    console.log('[DEBUG] Found plans:', plans.length);
 
     // Transform plans for frontend
     const transformedPlans = plans.map((plan: DBPlan) => {
-      const isCreator = plan.creator._id.toString() === userId;
+      const isCreator = plan.creator._id.toString() === currentUserId;
       const isFriend = friendIds.some((fId: mongoose.Types.ObjectId) => 
         fId.equals(plan.creator._id)
       );
@@ -243,24 +281,24 @@ export async function GET(req: NextRequest) {
           time: plan.event.time,
           startTime: plan.event.startTime,
           duration: plan.event.duration,
-          interestedUsers: plan.event.interestedUsers.map(user => ({
-            userId: user.userId.toString(),
-            name: user.name,
-            avatar: user.avatar,
-            joinedAt: user.joinedAt instanceof Date ? user.joinedAt.toISOString() : user.joinedAt
-          })),
           currentInterested: plan.event.interestedUsers?.length || 0,
-          openInvite: plan.event.openInvite,
-          totalSpots: plan.event.totalSpots,
-          openSpots: plan.event.openSpots,
-          participants: plan.event.participants.map(p => ({
+          interestedUsers: plan.event.interestedUsers || [],
+          totalSpots: plan.event.totalSpots || 0,
+          openSpots: plan.event.openSpots || 0,
+          openInvite: plan.event.openInvite || false,
+          participants: plan.event.participants?.map(p => ({
+            ...p,
+            id: p.userId.toString(),
             userId: p.userId.toString(),
-            name: p.name,
-            avatar: p.avatar,
-            status: p.status,
-            joinedAt: p.joinedAt instanceof Date ? p.joinedAt.toISOString() : p.joinedAt
-          }))
-        }
+            joinedAt: p.joinedAt.toISOString()
+          })) || []
+        },
+        isInterested: plan.event.interestedUsers?.some(u => 
+          u.userId.toString() === currentUserId
+        ) || false,
+        isParticipating: plan.event.participants?.some(p => 
+          p.userId.toString() === currentUserId
+        ) || false
       };
     });
 
